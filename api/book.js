@@ -17,10 +17,15 @@ module.exports = async (req,res)=>{
   }
   const {data,error}=await supabase.from('solar_consultations').insert({customer_name:b.name,phone:b.phone,email:b.email||null,street_address:b.address,city:b.city,zip:b.zip,preferred_date:b.date,appointment_time:b.time,notes:b.notes||null,bill_path:bill_path}).select('id').single();
   if(error){if(bill_path) await supabase.storage.from('electric-bills').remove([bill_path]); if(error.code==='23505') return res.status(409).json({error:'That appointment time was just taken. Please choose another time.'}); throw error}
+  let bill_url=null;
+  if(bill_path){
+   const signed=await supabase.storage.from('electric-bills').createSignedUrl(bill_path,60*60*24*7);
+   if(!signed.error) bill_url=signed.data.signedUrl;
+  }
   if(process.env.RESEND_API_KEY && process.env.SOLAR_NOTIFICATION_FROM){
    try{
     const resend=new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({from:process.env.SOLAR_NOTIFICATION_FROM,to:process.env.SOLAR_NOTIFICATION_TO||'ionsolar.tclark@gmail.com',subject:'New solar consultation — '+b.date+' '+b.time,html:`<h2>New Solar Consultation</h2><p><b>Name:</b> ${esc(b.name)}<br><b>Phone:</b> ${esc(b.phone)}<br><b>Email:</b> ${esc(b.email||'Not provided')}<br><b>Address:</b> ${esc(b.address)}, ${esc(b.city)} ${esc(b.zip)}<br><b>Date:</b> ${esc(b.date)}<br><b>Time:</b> ${esc(b.time)} Eastern<br><b>Notes:</b> ${esc(b.notes||'None')}<br><b>Usage graph uploaded:</b> ${bill_path?'Yes':'No'}</p>`});
+    await resend.emails.send({from:process.env.SOLAR_NOTIFICATION_FROM,to:process.env.SOLAR_NOTIFICATION_TO||'ionsolar.tclark@gmail.com',subject:'New solar consultation — '+b.date+' '+b.time,html:`<h2>New Solar Consultation</h2><p><b>Name:</b> ${esc(b.name)}<br><b>Phone:</b> ${esc(b.phone)}<br><b>Email:</b> ${esc(b.email||'Not provided')}<br><b>Address:</b> ${esc(b.address)}, ${esc(b.city)} ${esc(b.zip)}<br><b>Date:</b> ${esc(b.date)}<br><b>Time:</b> ${esc(b.time)} Eastern<br><b>Notes:</b> ${esc(b.notes||'None')}<br><b>Usage graph uploaded:</b> ${bill_path?'Yes':'No'}${bill_url?`<br><br><a href="${bill_url}" style="display:inline-block;background:#1769e8;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">View Usage Graph</a><br><small>This secure link expires in 7 days.</small>`:''}</p>`});
    }catch(emailError){ console.error('Notification email failed:',emailError); }
   }
   return res.status(200).json({ok:true,id:data.id});
