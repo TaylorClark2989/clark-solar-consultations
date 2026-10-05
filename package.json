@@ -1,0 +1,1 @@
+{"name":"clark-solar-consultations","private":true,"dependencies":{"@supabase/supabase-js":"^2.57.4","resend":"^6.1.0"}}
